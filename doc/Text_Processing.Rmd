@@ -38,7 +38,7 @@ library(DT)
 
 ```{r}
 # load lyrics data
-load('/Users/jiejin/Documents/GitHub/fall2019-proj1--bangbangzhuangzhuang/data/lyrics.RData') 
+load('../data/lyrics.RData') 
 ```
 
 
