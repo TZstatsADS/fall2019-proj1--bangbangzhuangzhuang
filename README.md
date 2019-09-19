@@ -12,7 +12,9 @@ Term: Fall 2019
 + Projec title: optimism or pessimism?
 + This project is conducted by Jie Jin
 
-+ Project summary: This report is based on the "lyrics.RData". Frist, I cleaned the data and created own data set "word_lyrics.RData" (the document is too large to upload). Then I did data analysis. Find that American poets use “LOVE” a lot, the frequency is 6 times bigger than the second-used word. It gives us a misconception that most american poets are optimism, however, when we consider the whole positive words ratio VS nagative words ratio, most american poets are pessimism!
++ Project summary: This report is based on the "lyrics.RData". Frist, I cleaned the data and created own data set "word_lyrics.RData" (the document is too large to upload). Then I did data analysis. 
+
+What I found: American poets use “LOVE” a lot, the frequency is 6 times bigger than the second-used word. It gives us a misconception that most american poets are optimism, however, when we consider the whole positive words ratio VS nagative words ratio, most american poets are pessimism!
 
 Following [suggestions](http://nicercode.github.io/blog/2013-04-05-projects/) by [RICH FITZJOHN](http://nicercode.github.io/about/#Team) (@richfitz). This folder is orgarnized as follows.
 
