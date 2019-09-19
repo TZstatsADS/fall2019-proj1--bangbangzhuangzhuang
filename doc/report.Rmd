@@ -1,0 +1,222 @@
+---
+title: "R Notebook"
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
+
+Please run the Text_Processing.Rmd first (I created a different data set), Or dowload the "word_lyrics.RData" file from output. Thanks!  
+<font size=15>optimism or pessimism</font>  
+
+<font size=5>I read lyrics a lot from primary school to university. In my memory, most famous chinese lyrics are about sad stories. Most Chinese poets are very pessimism.</font>   
+
+<font size=8>How about american poet? I'm about to find out!</font>
+
+```{r}
+load('../output/word_lyrics.RData') 
+```
+
+
+```{r}
+library(tidytext)
+library(dplyr)
+library(stringr)
+library(wordcloud)
+library(reshape2)
+library(ggplot2)
+```
+
+```{r}
+word_lyrics %>%
+  count(word) %>%
+  with(wordcloud(word, n, max.words = 100))
+```
+
+```{r}
+bing_word_counts <- word_lyrics %>%
+  inner_join(get_sentiments("bing")) %>%
+  count(word, sentiment, sort = TRUE) %>%
+  ungroup()
+
+head(bing_word_counts,10)
+```
+
+```{r}
+word_lyrics %>%
+  inner_join(get_sentiments("bing")) %>%
+  count(word, sentiment, sort = TRUE) %>%
+  acast(word ~ sentiment, value.var = "n", fill = 0) %>%
+  comparison.cloud(colors = c("blue", "red"),
+                   max.words = 100)
+```
+
+
+<font size=5>The number of "love" used in the lyrics is quite surprising. Lyrics are full of “love”. Does that mean american poets are truly optimism?</font>
+
+```{r}
+bing_word_counts %>%
+  group_by(sentiment) %>%
+  top_n(10) %>%
+  ungroup() %>%
+  mutate(word = reorder(word, n)) %>%
+  ggplot(aes(word, n, fill = sentiment)) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~sentiment, scales = "free_y") +
+  labs(y = "Contribution to sentiment",
+       x = NULL) +
+  coord_flip()
+```
+
+
+<font size=5>Two graphy above shows among the top10 positve words and negative words, the number american poets use is amost the same. Let's look deeper!</font>
+
+```{r}
+bingnegative <- get_sentiments("bing") %>% 
+  filter(sentiment == "negative")
+
+wordcounts <- word_lyrics %>%
+  group_by(year) %>%
+  summarize(words = n())
+
+negat <- word_lyrics %>%
+  semi_join(bingnegative) %>%
+  group_by(year) %>%
+  summarize(negativewords = n()) %>%
+  left_join(wordcounts, by = c("year")) %>%
+  mutate(ratio = negativewords/words) %>%
+  filter(year != 0) %>%
+  ungroup()
+
+bingpositive <- get_sentiments("bing") %>% 
+  filter(sentiment == "positive")
+
+posit<- word_lyrics %>%
+  semi_join(bingpositive) %>%
+  group_by(year) %>%
+  summarize(positivewords = n()) %>%
+  left_join(wordcounts, by = c("year")) %>%
+  mutate(ratio = positivewords/words) %>%
+  filter(year != 0) %>%
+  ungroup()
+
+wordstable <- merge(negat,posit,by="year",all=T)
+l <- c(1,2)
+wordstable <- wordstable[-l,]
+wordstable
+```
+
+```{r}
+wordstable$posnogratio<-wordstable$positivewords/wordstable$negativewords
+poyear <- wordstable$year[which(wordstable$posnograti>1)]
+length(poyear)
+neyear <- wordstable$year[which(wordstable$posnograti<1)]
+length(neyear)
+```
+<font size=5>Op! Surprise! Among 48 years, there is only 4 years that positive words ratio is greater than the negative words ratio!</font>
+
+```{r}
+ggplot(wordstable, aes(x=year)) + 
+            geom_point(aes(y=ratio.x), ) + 
+            geom_line(aes(y=ratio.x, , color="ratio.x")) +
+            geom_point(aes(y=ratio.y)) + 
+            geom_line(aes(y=ratio.y, color="ratio.y"))+
+  scale_colour_manual("",values = c("ratio.x" = "blue","ratio.y" = "red"))+
+  xlab("Year")+ylab("Number")+
+  theme(text=element_text(size=13, family="Comic Sans MS"))
+```
+
+
+<font size=5>The ratio.x means the negative words/total words; the ratio.y means the positive words/total words. In the graph, it seems that there is a trend that more and more negative words are used in the lyrics. The positive words ratio is kind of stable. Let's do a linear regression test to see whether there is a linear relationship between negative words and years.</font>
+
+```{r}
+summary(lm(wordstable$ratio.x~wordstable$year))
+```
+<font size=5>P value is quite large, which shows there is no significant evidence that negative words ratio has a positive linear relationship with years.</font>
+
+<font size=12>If the world without "LOVE"</font>  
+<font size=6>"love" seems like an outliear. The number of "LOVE" used in lyrics is 6 times bigger than the second-used word. What would happen if there is no "LOVE"</font>  
+
+```{r}
+delove <- which(word_lyrics$word=="love")
+newword_lyrics <- word_lyrics[-delove,]
+```
+
+```{r}
+emotion_word_counts <- newword_lyrics %>%
+  inner_join(get_sentiments("bing")) %>%
+  count(word, sentiment, sort = TRUE) %>%
+  ungroup()
+```
+
+<font size=5>without "LOVE" the image is more clear that there are more negative words used in the lyrics.</font> 
+
+```{r}
+emotion_word_counts %>%
+  group_by(sentiment) %>%
+  top_n(10) %>%
+  ungroup() %>%
+  mutate(word = reorder(word, n)) %>%
+  ggplot(aes(word, n, fill = sentiment)) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~sentiment, scales = "free_y") +
+  labs(y = "Contribution to sentiment",
+       x = NULL) +
+  coord_flip()
+```
+
+
+```{r}
+library(wordcloud)
+
+newword_lyrics %>%
+  count(word) %>%
+  with(wordcloud(word, n, max.words = 100))
+```
+
+```{r}
+bingnegative <- get_sentiments("bing") %>% 
+  filter(sentiment == "negative")
+
+wordcounts <- newword_lyrics %>%
+  group_by(year) %>%
+  summarize(words = n())
+
+negat <- newword_lyrics %>%
+  semi_join(bingnegative) %>%
+  group_by(year) %>%
+  summarize(negativewords = n()) %>%
+  left_join(wordcounts, by = c("year")) %>%
+  mutate(ratio = negativewords/words) %>%
+  filter(year != 0) %>%
+  ungroup()
+
+bingpositive <- get_sentiments("bing") %>% 
+  filter(sentiment == "positive")
+
+posit<- newword_lyrics %>%
+  semi_join(bingpositive) %>%
+  group_by(year) %>%
+  summarize(positivewords = n()) %>%
+  left_join(wordcounts, by = c("year")) %>%
+  mutate(ratio = positivewords/words) %>%
+  filter(year != 0) %>%
+  ungroup()
+
+wordstable <- merge(negat,posit,by="year",all=T)
+l <- c(1,2)
+wordstable <- wordstable[-l,]
+```
+
+```{r}
+wordstable$posnogratio<-wordstable$positivewords/wordstable$negativewords
+poyear <- wordstable$year[which(wordstable$posnograti>1)]
+length(poyear)
+neg <- wordstable$year[which(wordstable$posnograti<1)]
+length(neg)
+```
+
+<font size=5>No doubt, without "LOVE", each year, nagative words ratio is greater than positive words ratio.</font>   
+
+<font size=10>Conclusions</font>  
+<font size=5>American poets use "LOVE" a lot, the frequency is 6 times bigger than the second-used word. It gives us a misconception that most american poets are optimism, however, when we consider the whole positive words ratio VS nagative words ratio, most american poets are pessimism!</font>  
