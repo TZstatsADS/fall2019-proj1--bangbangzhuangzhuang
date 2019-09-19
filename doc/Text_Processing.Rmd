@@ -64,7 +64,6 @@ corpus <- VCorpus(VectorSource(dt_lyrics$lyrics))%>%
   tm_map(leadingWhitespace)
 ```
 
-
 ### Step 3 - Stemming words and converting tm object to tidy object
 
 Stemming reduces a word to its word *stem*. We stem the words here and then convert the "tm" object to a "tidy" object for much faster processing.
@@ -112,29 +111,19 @@ completed <- completed %>%
   select(-stems)
 ```
 
-### Step 8 - Pasting stem completed individual words into their respective lyrics
-
-We want our processed words to resemble the structure of the original lyrics. So we paste the words together to form processed lyrics.
-
-```{r reverse unnest}
-completed <- completed %>%
-  group_by(id) %>%
-  summarise(stemmedwords= str_c(word, collapse = " ")) %>%
-  ungroup()
-```
-
-### Step 9 - Keeping a track of the processed lyrics with their own ID
+### Step 7 - Keeping a track of the processed lyrics with their own ID
 
 ```{r cleaned hm_data, warning=FALSE, message=FALSE}
-dt_lyrics <- dt_lyrics %>%
+word_lyrics <- dt_lyrics %>%
   mutate(id = row_number()) %>%
   inner_join(completed)
+word_lyrics
 ```
 
 ### Exporting the processed text data into a CSV file
 
 ```{r export data}
-save(dt_lyrics, file="../output/processed_lyrics.RData")
+save(word_lyrics, file="../output/word_lyrics.RData")
 ```
 
 The final processed data is ready to be used for any kind of analysis.
