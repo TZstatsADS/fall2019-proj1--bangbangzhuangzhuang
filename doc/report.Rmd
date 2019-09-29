@@ -1,0 +1,315 @@
+---
+title: "R Notebook"
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
+
+<font size=15>optimism or pessimism</font>  
+
+<font size=5>I read lyrics a lot from primary school to university. In my memory, most famous chinese lyrics are about sad stories. Most Chinese artists are very pessimism.</font>   
+
+<font size=8>How about american artists? I'm about to find out!</font>
+
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+packages.used=c("tm","data.table","tidytext","tidyverse","DT", "dplyr", "stringr", "wordcloud", "reshape2", "ggplot2")
+# check packages that need to be installed.
+packages.needed=setdiff(packages.used, 
+                        intersect(installed.packages()[,1], 
+                                  packages.used))
+# install additional packages
+if(length(packages.needed)>0){
+  install.packages(packages.needed, dependencies = TRUE)
+}
+# Step 0 - Load all the required libraries
+```
+
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+library(tm)
+library(data.table)
+library(tidytext)
+library(tidyverse)
+library(DT)
+library(tidytext)
+library(tidyverse)
+library(DT)
+library(dplyr)
+library(stringr)
+library(wordcloud)
+library(reshape2)
+library(ggplot2)
+```
+
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+load('../data/lyrics.RData') 
+```
+
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+#Step 2 - Preliminary cleaning of text. We clean the text by converting all the letters to the lower case, and removing punctuation, numbers, empty words and extra white space.
+# function for removimg leading and trailing whitespace from character strings 
+leadingWhitespace <- content_transformer(function(x) str_trim(x, side = "both"))
+# remove stop words
+data("stop_words")
+word <- c("lot", "today", "months", "month", "wanna", "wouldnt", "wasnt", "ha", "na", "ooh", "da","gonna", "im", "dont", "aint", "wont", "yeah", "la", "oi", "nigga", "fuck","hey", "year", "years", "last", "past", "feel")
+stop_words <- c(stop_words$word, word)
+# clean the data and make a corpus
+corpus <- VCorpus(VectorSource(dt_lyrics$lyrics))%>%
+  tm_map(content_transformer(tolower))%>%
+  tm_map(removePunctuation)%>%
+  tm_map(removeWords, character(0))%>%
+  tm_map(removeWords, stop_words)%>%
+  tm_map(removeNumbers)%>%
+  tm_map(stripWhitespace)%>%
+  tm_map(leadingWhitespace)
+```
+
+
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+# Step 3 - Stemming words and converting tm object to tidy object
+stemmed <- tm_map(corpus, stemDocument) %>%
+  tidy() %>%
+  select(text)
+```
+
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+# Step 4 - Creating tidy format of the dictionary to be used for completing stems
+dict <- tidy(corpus) %>%
+  select(text) %>%
+  unnest_tokens(dictionary, text)
+```
+
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+# Step 5 - Combining stems and dictionary into the same tibble
+completed <- stemmed %>%
+  mutate(id = row_number()) %>%
+  unnest_tokens(stems, text) %>%
+  bind_cols(dict) 
+```
+
+
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+# Step 6 - Stem completion
+completed <- completed %>%
+  group_by(stems) %>%
+  count(dictionary) %>%
+  mutate(word = dictionary[which.max(n)]) %>%
+  ungroup() %>%
+  select(stems, word) %>%
+  distinct() %>%
+  right_join(completed) %>%
+  select(-stems)
+```
+
+
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+# Step 7 - Keeping a track of the processed lyrics with their own ID
+
+word_lyrics <- dt_lyrics %>%
+  mutate(id = row_number()) %>%
+  inner_join(completed)
+```
+
+
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+word_lyrics %>%
+  count(word) %>%
+  with(wordcloud(word, n, max.words = 100))
+```
+  
+<font size=5>Which word Amercian artists use most</font>
+
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+bing_word_counts <- word_lyrics %>%
+  inner_join(get_sentiments("bing")) %>%
+  count(word, sentiment, sort = TRUE) %>%
+  ungroup()
+
+head(bing_word_counts,10)
+```
+<font size=5>More specific, what kind of words American artists use most</font>
+
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+word_lyrics %>%
+  inner_join(get_sentiments("bing")) %>%
+  count(word, sentiment, sort = TRUE) %>%
+  acast(word ~ sentiment, value.var = "n", fill = 0) %>%
+  comparison.cloud(colors = c("blue", "red"),
+                   max.words = 100)
+```
+
+
+<font size=5>The number of "love" used in the lyrics is quite surprising. Lyrics are full of “love”. Does that mean american artists are truly optimism?</font>
+
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+bing_word_counts %>%
+  group_by(sentiment) %>%
+  top_n(10) %>%
+  ungroup() %>%
+  mutate(word = reorder(word, n)) %>%
+  ggplot(aes(word, n, fill = sentiment)) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~sentiment, scales = "free_y") +
+  labs(y = "Contribution to sentiment",
+       x = NULL) +
+  coord_flip()
+```
+
+
+<font size=5>Two graphy above shows among the top10 positve words and negative words, the number american poets use is amost the same. Let's look deeper!</font>
+
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+bingnegative <- get_sentiments("bing") %>% 
+  filter(sentiment == "negative")
+
+wordcounts <- word_lyrics %>%
+  group_by(year) %>%
+  summarize(words = n())
+
+negat <- word_lyrics %>%
+  semi_join(bingnegative) %>%
+  group_by(year) %>%
+  summarize(negativewords = n()) %>%
+  left_join(wordcounts, by = c("year")) %>%
+  mutate(ratio = negativewords/words) %>%
+  filter(year != 0) %>%
+  ungroup()
+
+bingpositive <- get_sentiments("bing") %>% 
+  filter(sentiment == "positive")
+
+posit<- word_lyrics %>%
+  semi_join(bingpositive) %>%
+  group_by(year) %>%
+  summarize(positivewords = n()) %>%
+  left_join(wordcounts, by = c("year")) %>%
+  mutate(ratio = positivewords/words) %>%
+  filter(year != 0) %>%
+  ungroup()
+
+wordstable <- merge(negat,posit,by="year",all=T)
+l <- c(1,2)
+wordstable <- wordstable[-l,]
+wordstable
+#give a basic idea about year and postive words
+```
+
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+wordstable$posnogratio<-wordstable$positivewords/wordstable$negativewords
+poyear <- wordstable$year[which(wordstable$posnograti>1)]
+length(poyear)
+neyear <- wordstable$year[which(wordstable$posnograti<1)]
+length(neyear)
+```
+<font size=5>Op! Surprise! Among 48 years, there is only 4 years that positive words ratio is greater than the negative words ratio! I prefer the ratio here, because there are more lyrics data in the recently year. Ratio is more convinced than just counting the words</font>
+
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+ggplot(wordstable, aes(x=year)) + 
+            geom_point(aes(y=ratio.x), ) + 
+            geom_line(aes(y=ratio.x, , color="ratio.x")) +
+            geom_point(aes(y=ratio.y)) + 
+            geom_line(aes(y=ratio.y, color="ratio.y"))+
+  scale_colour_manual("",values = c("ratio.x" = "blue","ratio.y" = "red"))+
+  xlab("Year")+ylab("Number")+
+  theme(text=element_text(size=13, family="Comic Sans MS"))
+#show the graph about year and ratio
+```
+
+
+<font size=5>The ratio.x means the negative words/total words; the ratio.y means the positive words/total words. In the graph, it seems that there is a trend that more and more negative words are used in the lyrics. The positive words ratio is kind of stable. Let's do a linear regression test to see whether there is a linear relationship between negative words and years.</font>
+
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+summary(lm(wordstable$ratio.x~wordstable$year))
+#find whether there is a linear relathion between year and ratio
+```
+<font size=5>P value is quite large, which shows there is no significant evidence that negative words ratio has a positive linear relationship with years.</font>
+
+<font size=12>If the world without "LOVE"</font>  
+<font size=6>"love" seems like an outliear. The number of "LOVE" used in lyrics is 6 times bigger than the second-used word. What would happen if there is no "LOVE"</font>  
+
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+delove <- which(word_lyrics$word=="love")
+newword_lyrics <- word_lyrics[-delove,]
+```
+
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+emotion_word_counts <- newword_lyrics %>%
+  inner_join(get_sentiments("bing")) %>%
+  count(word, sentiment, sort = TRUE) %>%
+  ungroup()
+#counts the emotion words
+```
+
+<font size=5>without "LOVE" the image is more clear that there are more negative words used in the lyrics.</font> 
+
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+emotion_word_counts %>%
+  group_by(sentiment) %>%
+  top_n(10) %>%
+  ungroup() %>%
+  mutate(word = reorder(word, n)) %>%
+  ggplot(aes(word, n, fill = sentiment)) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~sentiment, scales = "free_y") +
+  labs(y = "Contribution to sentiment",
+       x = NULL) +
+  coord_flip()
+#show the top 10 emotion words
+```
+
+
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+library(wordcloud)
+
+newword_lyrics %>%
+  count(word) %>%
+  with(wordcloud(word, n, max.words = 100))
+```
+
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+bingnegative <- get_sentiments("bing") %>% 
+  filter(sentiment == "negative")
+
+wordcounts <- newword_lyrics %>%
+  group_by(year) %>%
+  summarize(words = n())
+
+negat <- newword_lyrics %>%
+  semi_join(bingnegative) %>%
+  group_by(year) %>%
+  summarize(negativewords = n()) %>%
+  left_join(wordcounts, by = c("year")) %>%
+  mutate(ratio = negativewords/words) %>%
+  filter(year != 0) %>%
+  ungroup()
+
+bingpositive <- get_sentiments("bing") %>% 
+  filter(sentiment == "positive")
+
+posit<- newword_lyrics %>%
+  semi_join(bingpositive) %>%
+  group_by(year) %>%
+  summarize(positivewords = n()) %>%
+  left_join(wordcounts, by = c("year")) %>%
+  mutate(ratio = positivewords/words) %>%
+  filter(year != 0) %>%
+  ungroup()
+
+wordstable <- merge(negat,posit,by="year",all=T)
+l <- c(1,2)
+wordstable <- wordstable[-l,]
+```
+
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+wordstable$posnogratio<-wordstable$positivewords/wordstable$negativewords
+poyear <- wordstable$year[which(wordstable$posnograti>1)]
+length(poyear)
+neg <- wordstable$year[which(wordstable$posnograti<1)]
+length(neg)
+#check how many years negative words is greater than nagative words.
+```
+
+<font size=5>No doubt, without "LOVE", Among the 48 years(there is one year that no positive words showed in the lyrics except "LOVE"), there is no year that positive words is greater than nagative words. Nagative words ratio is always greater than positive words ratio.</font>   
+
+<font size=10>Conclusions</font>  
+<font size=5>American artists use "LOVE" a lot, the frequency is 6 times bigger than the second-used word. It gives us a misconception that most american artists are optimism, however, when we consider the whole positive words ratio VS nagative words ratio, most american artists are pessimism!</font>  
